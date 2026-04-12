@@ -1,18 +1,11 @@
 from typing import Optional
-from rapidfuzz import fuzz
-from paddleocr import PaddleOCR
+import re
 import cv2
 import numpy as np
-import re
+from rapidfuzz import fuzz
 
-_ocr = None
-
-
-def _load_ocr():
-    global _ocr
-    if _ocr is None:
-        _ocr = PaddleOCR(use_angle_cls=True, lang="en")
-    return _ocr
+# Reuse the same extraction logic as the primary ID
+from models.ocr_extractor import extract_id_fields, normalize_date
 
 
 def _normalize(s: Optional[str]) -> str:
@@ -24,108 +17,38 @@ def _normalize(s: Optional[str]) -> str:
 def _fuzzy_match(a: Optional[str], b: Optional[str]) -> dict:
     if not a or not b:
         return {"match": False, "confidence": 0.0, "flag": "UNAVAILABLE"}
-
     na, nb = _normalize(a), _normalize(b)
     if na == nb:
         return {"match": True, "confidence": 0.99, "flag": "MATCH"}
-
     score = fuzz.ratio(na, nb) / 100.0
-
     if score >= 0.85:
-        return {"match": True, "confidence": round(score, 3), "flag": "MATCH"}
+        return {"match": True,  "confidence": round(score, 3), "flag": "MATCH"}
     elif score >= 0.60:
         return {"match": False, "confidence": round(score, 3), "flag": "PARTIAL_MATCH"}
     else:
         return {"match": False, "confidence": round(score, 3), "flag": "MISMATCH"}
 
 
-def _ocr_text(img_bytes: bytes) -> str:
-    arr = np.frombuffer(img_bytes, np.uint8)
-    img = cv2.imdecode(arr, cv2.IMREAD_COLOR)
-    if img is None:
-        return ""
-
-    result = _load_ocr().ocr(img)
-    lines = [w[1][0] for line in result for w in line]
-    return "\n".join(lines)
-
-
-# ── Label synonym patterns ─────────────────────────────────────────────────────
-
-NAME_PATTERN = (
-    r"(?:full\s*name|complete\s*name|test\s*name|holder|applicant\s*name|"
-    r"sur\s*name|family\s*name|last\s*name|given\s*name s?|first\s*name|"
-    r"fore\s*name|pr[eé]nom|vorname|apellido|nom\s*de\s*famille|nachname|"
-    r"cognome|nombre|nome|(?<!\w)name(?!\s*\d)(?!\s*of\s*(?:document|state|country|post)))"
-)
-
-DOB_PATTERN = (
-    r"(?:date\s*of\s*birth|birth\s*date|birth\s*day|born|"
-    r"d\.?\s*o\.?\s*b\.?|dob|fecha\s*de\s*nacimiento|"
-    r"date\s*naissance|geburtsdatum|data\s*di\s*nascita|"
-    r"geboortedatum|dt\.?\s*of\s*birth)"
-)
-
-ADDRESS_PATTERN = (
-    r"(?:(?<!\w)address(?!\w)|residence|domicile|home\s*address|"
-    r"mailing\s*address|permanent\s*address|residential\s*address|"
-    r"direcci[oó]n|adresse|indirizzo|wohnort|wohnanschrift)"
-)
-
-
-def _extract_by_label(text: str, pattern: str) -> Optional[str]:
-    """Extract value appearing after a label on same or next line."""
-    # Same line: "Name: John Doe"
-    m = re.search(pattern + r'[\s:]+([^\n\r]{1,80})', text, re.IGNORECASE)
-    if m:
-        return m.group(1).strip()
-    return None
-
-
 def run_cross_doc_matching(id_fields: dict, support_doc_bytes: bytes) -> dict:
-    text = _ocr_text(support_doc_bytes)
+    # Use exact same extractor as primary ID — consistent parsing guaranteed
+    doc_fields = extract_id_fields(support_doc_bytes)
 
-    # ── Extract fields from supporting doc using synonyms ─────────────────────
-    doc_name    = _extract_by_label(text, NAME_PATTERN)
-    doc_dob     = None
-    doc_address = _extract_by_label(text, ADDRESS_PATTERN)
-
-    # DOB: try label-based first, then bare date pattern
-    dob_raw = _extract_by_label(text, DOB_PATTERN)
-    if dob_raw:
-        m = re.search(r'\b(\d{4}-\d{2}-\d{2}|\d{2}[-/]\d{2}[-/]\d{4})\b', dob_raw)
-        if m:
-            doc_dob = m.group(1)
-    if not doc_dob:
-        m = re.search(r'\b(\d{4}-\d{2}-\d{2})\b', text)
-        if m:
-            doc_dob = m.group(1)
-
-    # Fallback address: street pattern
-    if not doc_address:
-        m = re.search(
-            r'(\d+\s+\w[\w\s,]+(?:ST|AVE|DR|RD|BLVD|LN|STREET|ROAD|LANE)[,.\s][\w\s,]+\d{4,6})',
-            text, re.IGNORECASE
-        )
-        if m:
-            doc_address = m.group(1).strip()
-
-    # Split doc_name into first/last
-    doc_last  = doc_name.split()[-1] if doc_name else None
-    doc_first = doc_name.split()[0]  if doc_name else None
-
-    # ── Comparisons ───────────────────────────────────────────────────────────
     comparisons = []
 
-    r = _fuzzy_match(id_fields.get("last_name"), doc_last)
-    comparisons.append({"field": "last_name",  "id_value": id_fields.get("last_name"),
-                         "doc_value": doc_last,  **r})
+    # ── Last name ─────────────────────────────────────────────────────────────
+    r = _fuzzy_match(id_fields.get("last_name"), doc_fields.get("last_name"))
+    comparisons.append({"field": "last_name",
+                        "id_value": id_fields.get("last_name"),
+                        "doc_value": doc_fields.get("last_name"), **r})
 
-    r = _fuzzy_match(id_fields.get("first_name"), doc_first)
-    comparisons.append({"field": "first_name", "id_value": id_fields.get("first_name"),
-                         "doc_value": doc_first, **r})
+    # ── First name ────────────────────────────────────────────────────────────
+    r = _fuzzy_match(id_fields.get("first_name"), doc_fields.get("first_name"))
+    comparisons.append({"field": "first_name",
+                        "id_value": id_fields.get("first_name"),
+                        "doc_value": doc_fields.get("first_name"), **r})
 
-    id_dob = id_fields.get("dob")
+    # ── DOB ───────────────────────────────────────────────────────────────────
+    id_dob, doc_dob = id_fields.get("dob"), doc_fields.get("dob")
     if id_dob and doc_dob:
         match = id_dob == doc_dob
         comparisons.append({"field": "dob", "id_value": id_dob, "doc_value": doc_dob,
@@ -135,9 +58,23 @@ def run_cross_doc_matching(id_fields: dict, support_doc_bytes: bytes) -> dict:
         comparisons.append({"field": "dob", "id_value": id_dob, "doc_value": doc_dob,
                              "match": False, "confidence": 0.0, "flag": "UNAVAILABLE"})
 
-    r = _fuzzy_match(id_fields.get("address"), doc_address)
-    comparisons.append({"field": "address", "id_value": id_fields.get("address"),
-                         "doc_value": doc_address, **r})
+    # ── Address ───────────────────────────────────────────────────────────────
+    r = _fuzzy_match(id_fields.get("address"), doc_fields.get("address"))
+    comparisons.append({"field": "address",
+                        "id_value": id_fields.get("address"),
+                        "doc_value": doc_fields.get("address"), **r})
+
+    # ── ID number ─────────────────────────────────────────────────────────────
+    r = _fuzzy_match(id_fields.get("id_number"), doc_fields.get("id_number"))
+    comparisons.append({"field": "id_number",
+                        "id_value": id_fields.get("id_number"),
+                        "doc_value": doc_fields.get("id_number"), **r})
+
+    # ── Nationality ───────────────────────────────────────────────────────────
+    r = _fuzzy_match(id_fields.get("issuing_country"), doc_fields.get("issuing_country"))
+    comparisons.append({"field": "nationality",
+                        "id_value": id_fields.get("issuing_country"),
+                        "doc_value": doc_fields.get("issuing_country"), **r})
 
     score = sum(c["confidence"] for c in comparisons) / len(comparisons)
     consistency = (
@@ -149,6 +86,7 @@ def run_cross_doc_matching(id_fields: dict, support_doc_bytes: bytes) -> dict:
 
     return {
         "cross_doc_available":  True,
+        "doc_extracted_fields": doc_fields,
         "comparisons":          comparisons,
         "overall_match_score":  round(score, 3),
         "identity_consistency": consistency,

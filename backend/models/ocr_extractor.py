@@ -21,22 +21,33 @@ except ImportError:
 _ocr = None
 
 LABEL_SYNONYMS = {
-    "last_name":          r"sur\s*name|family\s*name|last\s*name|apellido|nom\s*de\s*famille|nachname|cognome|name\s*1",
-    "first_name":         r"given\s*names?|first\s*name|fore\s*name|pr[eé]nom|vorname|nome|nombre|name\s*2",
-    "full_name":          r"full\s*name|complete\s*name|test\s*name|holder|applicant\s*name",
-    "dob":                r"date\s*of\s*birth|birth\s*date|birth\s*day|d\.?\s*o\.?\s*b\.?|dob|fecha\s*de\s*nacimiento|geburtsdatum",
-    "expiration":         r"expir\w*|expiretion|valid\s*(?:until|thru|through|to|upto)|date\s*of\s*expir\w*|validity|ablaufdatum",
-    "issue_date":         r"issue\s*(?:date|d\.?|cat)|date\s*of\s*issue|issued\s*(?:on|date)?|issuance\s*date",
-    "id_number":          r"passport\s*num\w*|passport\s*no|document\s*no|id\s*num\w*|id\s*no|control\s*num\w*|licence\s*no|license\s*no|card\s*no|registration\s*no",
-    "nationality":        r"nationalit\w*|country\s*of\s*(?:birth|origin|citizenship)|citizenship",
-    "issuing_authority":  r"issuing\s*(?:post|authority|office|state|country|place)|place\s*of\s*issue|issued\s*by|issued\s*at",
-    "gender":             r"(?<!\w)sex(?!\w)|(?<!\w)gender(?!\w)|sexe|geschlecht",
-    "address":            r"(?<!\w)address(?!\w)|residence|domicile|home\s*address|mailing\s*address",
-    "visa_type":          r"visa\s*type|visa\s*class|visa\s*category|type\s*of\s*visa",
-    "license_class":      r"licen[sc]e\s*class|class\s*of\s*licen[sc]e|dl\s*class",
-    "height":             r"(?<!\w)h(?:ei)?g?ht(?!\w)|hgt|stature",
-    "eye_color":          r"eye\s*colou?r|eyes|iris\s*colou?r",
-    "place_of_birth":     r"place\s*of\s*birth|birth\s*place|born\s*in|lieu\s*de\s*naissance|geburtsort",
+    "last_name":         r"sur\s*name|family\s*name|last\s*name|apellido|nom\s*de\s*famille|nachname|cognome|name\s*1",
+    "first_name":        r"given\s*names?|first\s*name|fore\s*name|pr[eé]nom|vorname|nome|nombre|name\s*2",
+    "full_name":         r"full\s*name|complete\s*name|test\s*name|holder|applicant\s*name",
+    "dob":               r"date\s*of\s*birth|birth\s*date|d\.?\s*o\.?\s*b\.?|(?<!\w)dob(?!\w)|fecha\s*de\s*nacimiento|geburtsdatum",
+    "expiration":        r"expir\w*|expiretion|valid\s*(?:until|thru|to|upto)",
+    "issue_date":        r"issue\s*(?:date|d\.?|cat)|date\s*of\s*issue|issued\s*(?:on|date)?",
+    "id_number":         r"passport\s*num\w*|passport\s*no|document\s*no|id\s*num\w*|id\s*no|control\s*num\w*|licence\s*no|license\s*no|card\s*no",
+    "nationality":       r"nationalit\w*|citizenship|country\s*of\s*(?:birth|origin|citizenship)",
+    "issuing_authority": r"issuing\s*(?:post|authority|office|state|place)|place\s*of\s*issue|issued\s*by",
+    "gender":            r"(?<!\w)sex(?!\w)|(?<!\w)gender(?!\w)",
+    "address":           r"(?<!\w)address(?!\w)|residence|domicile|home\s*address",
+    "visa_type":         r"visa\s*type|visa\s*class|type\s*of\s*visa",
+    "license_class":     r"licen[sc]e\s*class|dl\s*class",
+    "height":            r"(?<!\w)h(?:ei)?g?ht(?!\w)|(?<!\w)hgt(?!\w)",
+    "eye_color":         r"eye\s*colou?r|(?<!\w)eyes(?!\w)",
+    "place_of_birth":    r"place\s*of\s*birth|birth\s*place|born\s*in",
+}
+
+# Fields that commonly appear as short standalone labels on ID cards
+# These should NOT be used as name/value extractors since they confuse the parser
+SKIP_AS_VALUE = {
+    "issue date", "issue cat", "expiry date", "expiration date", "birth date",
+    "date of birth", "given name", "given names", "surname", "family name",
+    "last name", "first name", "full name", "passport number", "passport no",
+    "id number", "id no", "control number", "nationality", "gender", "sex",
+    "address", "place of issue", "issuing post", "visa type", "license class",
+    "eye color", "height", "place of birth", "dob", "expiretion date",
 }
 
 
@@ -55,16 +66,14 @@ def _extract_from_ocr_result(item) -> list:
             if isinstance(obj, str) and len(obj) > 1:
                 texts.append(obj)
             elif isinstance(obj, list):
-                for el in obj:
-                    _dig(el)
+                for el in obj: _dig(el)
             elif isinstance(obj, dict):
                 if 'rec_texts' in obj:
                     for t in obj['rec_texts']:
                         if isinstance(t, str) and len(t.strip()) > 1:
                             texts.append(t.strip())
                     return
-                for v in obj.values():
-                    _dig(v)
+                for v in obj.values(): _dig(v)
         _dig(raw)
     except Exception as e:
         print(f"[OCR] parse error: {e}")
@@ -128,13 +137,41 @@ def normalize_date(s) -> Optional[str]:
     return None
 
 
+def _is_label_line(line: str) -> bool:
+    """Return True if this line is purely a label (should not be used as a value)."""
+    return line.strip().lower() in SKIP_AS_VALUE
+
+
+def _is_any_label(line: str) -> bool:
+    """Return True if line matches any known label pattern."""
+    for pat in LABEL_SYNONYMS.values():
+        try:
+            if re.fullmatch(r'\s*(?:' + pat + r')\s*', line.strip(), re.IGNORECASE):
+                return True
+        except re.error:
+            pass
+    return _is_label_line(line)
+
+
 def value_after_label(lines: list, pattern: str) -> Optional[str]:
-    all_labels = "|".join(LABEL_SYNONYMS.values())
+    """
+    Find a label line and return the next non-label, non-empty value.
+    Only matches lines that are EXACTLY the label (fullmatch), not lines
+    that merely contain the label word.
+    """
     for i, line in enumerate(lines):
-        if re.search(pattern, line.strip(), re.IGNORECASE):
+        stripped = line.strip()
+        # Must be an exact label match, not a partial word inside a value
+        try:
+            is_exact_label = bool(re.fullmatch(r'\s*(?:' + pattern + r')\s*',
+                                               stripped, re.IGNORECASE))
+        except re.error:
+            is_exact_label = bool(re.search(pattern, stripped, re.IGNORECASE))
+
+        if is_exact_label:
             for j in range(i + 1, min(i + 3, len(lines))):
                 val = lines[j].strip()
-                if val and not re.search(all_labels, val, re.IGNORECASE):
+                if val and not _is_any_label(val):
                     return val
     return None
 
@@ -146,16 +183,21 @@ def extract_id_fields(img_bytes: bytes) -> dict:
 
     def get(field: str) -> Optional[str]:
         pat = LABEL_SYNONYMS[field]
-        # value-after-label
+        # 1. Exact label on its own line, value on next line
         val = value_after_label(lines, pat)
         if val:
             return val
-        # inline: "DOB: 14JAN2000"
+        # 2. Inline: "DOB: 14JAN2000" — only if label is at start of line
         try:
-            m = re.search(r"(?:" + pat + r")[\s:\/]+([^\n\r]{1,60})", text, re.IGNORECASE)
-            return m.group(1).strip() if m else None
+            m = re.search(r'(?:^|\n)\s*(?:' + pat + r')\s*[:\-\/]\s*([^\n\r]{1,60})',
+                          text, re.IGNORECASE | re.MULTILINE)
+            if m:
+                val = m.group(1).strip()
+                if not _is_any_label(val):
+                    return val
         except re.error:
-            return None
+            pass
+        return None
 
     # ── Name ──────────────────────────────────────────────────────────────────
     surname    = get("last_name")
@@ -177,6 +219,7 @@ def extract_id_fields(img_bytes: bytes) -> dict:
     exp_raw   = get("expiration")
     issue_raw = get("issue_date")
 
+    # Positional fallback — only if labels not found
     if not dob_raw and norm_dates:
         dob_raw = norm_dates[0]
     if not exp_raw and len(norm_dates) >= 2:
@@ -198,7 +241,8 @@ def extract_id_fields(img_bytes: bytes) -> dict:
     gender = None
     if gender_raw:
         g = gender_raw.strip().upper()
-        gender = "M" if g in ("M","MALE","MASCULIN") else "F" if g in ("F","FEMALE","FEMININ") else g[:1]
+        gender = "M" if g in ("M","MALE","MASCULIN") else \
+                 "F" if g in ("F","FEMALE","FEMININ") else g[:1]
 
     # MRZ fallback for id_number
     if not id_number:
