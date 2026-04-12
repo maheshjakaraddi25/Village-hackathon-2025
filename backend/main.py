@@ -360,39 +360,36 @@ def health():
 
 @app.post("/verify", response_model=VerificationResult)
 async def verify(
-    id_doc: UploadFile = File(..., description="Primary ID image"),
-    support_doc: Optional[UploadFile] = File(None, description="Second doc (loan app, deed, etc.)"),
+    id_doc:      UploadFile = File(...),
+    support_doc: Optional[UploadFile] = File(None),
+    selfie:      Optional[UploadFile] = File(None),   # NEW
 ):
-    import time
-    t0 = time.time()
+    import time; t0 = time.time()
 
-    # Validate primary ID
-    if id_doc.content_type not in ALLOWED_MIME_TYPES:
-        raise HTTPException(400, f"Unsupported file type: {id_doc.content_type}. Use JPEG, PNG, or WebP.")
+    id_bytes      = await id_doc.read()
+    selfie_bytes  = await selfie.read()      if selfie      else None
+    doc2_bytes    = await support_doc.read() if support_doc else None
+    doc2_mime     = support_doc.content_type if support_doc else None
 
-    id_bytes = await id_doc.read()
-    if len(id_bytes) > MAX_FILE_SIZE_MB * 1024 * 1024:
-        raise HTTPException(413, f"ID file too large (max {MAX_FILE_SIZE_MB}MB)")
+    # ── Stage 1-4: local models (fast, free) ──────────────────────
+    local = await run_local_pipeline(id_bytes, selfie_bytes)
 
-    doc2_bytes, doc2_mime = None, None
-    if support_doc and support_doc.filename:
-        if support_doc.content_type not in ALLOWED_MIME_TYPES:
-            raise HTTPException(400, f"Unsupported second doc type: {support_doc.content_type}")
-        doc2_bytes = await support_doc.read()
-        doc2_mime = support_doc.content_type
+    # Early reject: if authenticity is FAIL + liveness is SPOOF, skip Claude
+    auth_score = local['local']['authenticity']['score']
+    live_ok    = local['local']['liveness']['verdict'] == 'LIVE' if selfie_bytes else True
+    if auth_score < 0.4 and not live_ok:
+        raise HTTPException(400, "Document failed authenticity and liveness checks")
 
-    try:
-        raw_result = await call_claude(id_bytes, id_doc.content_type, doc2_bytes, doc2_mime)
-    except json.JSONDecodeError as e:
-        raise HTTPException(502, f"Claude returned invalid JSON: {e}")
-    except anthropic.APIError as e:
-        raise HTTPException(502, f"Anthropic API error: {e}")
+    # ── Stage 5: Claude Vision (LV1-LV4 structured output) ─────────
+    raw_result = await call_claude(id_bytes, id_doc.content_type,
+                                   doc2_bytes, doc2_mime)
 
+    # ── Merge local model scores into Claude's structured output ───
+    raw_result['local_models'] = local['local']
     raw_result = enrich_expiration(raw_result)
-    raw_result["processing_time_ms"] = int((time.time() - t0) * 1000)
+    raw_result['processing_time_ms'] = int((time.time() - t0) * 1000)
 
     return JSONResponse(content=raw_result)
-
 
 @app.post("/synthetic-test")
 async def synthetic_test():
