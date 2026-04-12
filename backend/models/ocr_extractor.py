@@ -1,8 +1,12 @@
-from paddleocr import PaddleOCR
 import re
 import cv2
 import numpy as np
 from datetime import datetime
+
+try:
+    from paddleocr import PaddleOCR
+except ImportError:
+    PaddleOCR = None
 
 
 _ocr = None
@@ -10,6 +14,8 @@ _ocr = None
 
 def _load():
     global _ocr
+    if PaddleOCR is None:
+        raise RuntimeError("paddleocr is not installed. Add it to your environment to enable OCR extraction.")
     if _ocr is None:
         _ocr = PaddleOCR(use_angle_cls=True, lang="en", use_gpu=False)
     return _ocr

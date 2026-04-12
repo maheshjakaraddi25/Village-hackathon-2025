@@ -15,15 +15,25 @@ import time
 from datetime import date, datetime
 from typing import Optional
 
-import anthropic
 from fastapi import FastAPI, File, HTTPException, UploadFile
-from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from models.pipeline import run_local_pipeline
-from rules.schema_patch import ensure_schema
-from rules.compliance import enforce_compliance_rules
-from rules.cross_doc import run_cross_doc_matching
+try:
+    import anthropic
+except ImportError:
+    anthropic = None
+
+try:
+    from .models.pipeline import run_local_pipeline
+    from .rules.schema_patch import ensure_schema
+    from .rules.compliance import enforce_compliance_rules
+    from .rules.cross_doc import run_cross_doc_matching
+except ImportError:
+    from models.pipeline import run_local_pipeline
+    from rules.schema_patch import ensure_schema
+    from rules.compliance import enforce_compliance_rules
+    from rules.cross_doc import run_cross_doc_matching
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -38,7 +48,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-client = anthropic.Anthropic()
+client = anthropic.Anthropic() if anthropic is not None else None
 
 ALLOWED_MIME_TYPES = {"image/jpeg", "image/png", "image/webp"}
 MAX_FILE_SIZE_MB = 10
@@ -204,6 +214,9 @@ Key compliance rules to apply:
 async def call_claude(id_bytes: bytes, id_mime: str,
                       doc2_bytes: Optional[bytes] = None,
                       doc2_mime: Optional[str] = None) -> dict:
+    if client is None:
+        raise RuntimeError("anthropic is not installed. Add it to your environment to enable Claude analysis.")
+
     has_second = doc2_bytes is not None
 
     content = [encode_image(id_bytes, id_mime)]

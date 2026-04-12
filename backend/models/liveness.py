@@ -1,6 +1,8 @@
-import cv2, numpy as np, mediapipe as mp
+import cv2
+import numpy as np
+from skimage.feature import local_binary_pattern
 
-mp_face = mp.solutions.face_mesh
+# mp_face = mp.solutions.face_mesh
 EYE_L = [33,160,158,133,153,144]
 EYE_R = [362,385,387,263,373,380]
 
@@ -35,22 +37,22 @@ def passive_liveness(img_bytes: bytes) -> dict:
         "verdict": "LIVE" if score > 0.5 else "SPOOF"
     }
 
-def active_liveness_from_frames(frame_bytes_list: list[bytes]) -> dict:
-    """Pass a sequence of webcam frames; returns blink count."""
-    blinks, consec = 0, 0
-    with mp_face.FaceMesh(refine_landmarks=True) as mesh:
-        for raw in frame_bytes_list:
-            arr   = np.frombuffer(raw, np.uint8)
-            frame = cv2.imdecode(arr, cv2.IMREAD_COLOR)
-            H, W  = frame.shape[:2]
-            res   = mesh.process(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
-            if res.multi_face_landmarks:
-                lm  = res.multi_face_landmarks[0].landmark
-                ear = (_ear(lm, EYE_L, W, H) + _ear(lm, EYE_R, W, H)) / 2
-                if ear < 0.20:
-                    consec += 1
-                elif consec >= 2:
-                    blinks += 1; consec = 0
-                else:
-                    consec = 0
-    return {'blink_count': blinks, 'verdict': 'LIVE' if blinks >= 2 else 'FAIL'}
+# def active_liveness_from_frames(frame_bytes_list: list[bytes]) -> dict:
+#     """Pass a sequence of webcam frames; returns blink count."""
+#     blinks, consec = 0, 0
+#     with mp_face.FaceMesh(refine_landmarks=True) as mesh:
+#         for raw in frame_bytes_list:
+#             arr   = np.frombuffer(raw, np.uint8)
+#             frame = cv2.imdecode(arr, cv2.IMREAD_COLOR)
+#             H, W  = frame.shape[:2]
+#             res   = mesh.process(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
+#             if res.multi_face_landmarks:
+#                 lm  = res.multi_face_landmarks[0].landmark
+#                 ear = (_ear(lm, EYE_L, W, H) + _ear(lm, EYE_R, W, H)) / 2
+#                 if ear < 0.20:
+#                     consec += 1
+#                 elif consec >= 2:
+#                     blinks += 1; consec = 0
+#                 else:
+#                     consec = 0
+#     return {'blink_count': blinks, 'verdict': 'LIVE' if blinks >= 2 else 'FAIL'}

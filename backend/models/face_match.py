@@ -1,8 +1,12 @@
-from deepface import DeepFace
 import tempfile
 import os
 import cv2
 import numpy as np
+
+try:
+    from deepface import DeepFace
+except ImportError:
+    DeepFace = None
 
 
 def _bytes_to_imgfile(img_bytes: bytes) -> str:
@@ -15,6 +19,9 @@ def _bytes_to_imgfile(img_bytes: bytes) -> str:
 
 
 def _crop_best_face(img_path: str) -> str | None:
+    if DeepFace is None:
+        raise RuntimeError("deepface is not installed. Add it to your environment to enable face matching.")
+
     faces = DeepFace.extract_faces(
         img_path=img_path,
         detector_backend="retinaface",
