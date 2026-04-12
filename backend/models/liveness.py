@@ -12,23 +12,27 @@ def _ear(lm, pts, W, H):
     return (A+B)/(2.0*C)
 
 def passive_liveness(img_bytes: bytes) -> dict:
-    arr  = np.frombuffer(img_bytes, np.uint8)
+    arr = np.frombuffer(img_bytes, np.uint8)
     frame = cv2.imdecode(arr, cv2.IMREAD_COLOR)
-    gray  = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
-    blur  = cv2.Laplacian(gray, cv2.CV_64F).var()
+    if frame is None:
+        return {"verdict": "SPOOF", "liveness_score": 0.0, "error": "invalid image"}
 
-    from skimage.feature import local_binary_pattern
-    lbp   = local_binary_pattern(gray, P=8, R=1, method='uniform')
-    hist,_ = np.histogram(lbp.ravel(), bins=59, range=(0,59), density=True)
-    textr = float(np.std(hist))
+    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
-    score = min(1.0, (blur/500)*0.5 + (textr/0.05)*0.5)
+    blur = cv2.Laplacian(gray, cv2.CV_64F).var()
+
+    lbp = local_binary_pattern(gray, P=8, R=1, method="uniform")
+    hist, _ = np.histogram(lbp.ravel(), bins=59, range=(0, 59), density=True)
+    texture_std = float(np.std(hist))
+
+    score = min(1.0, (blur / 500) * 0.5 + (texture_std / 0.05) * 0.5)
+
     return {
-        'blur_score':     round(blur, 2),
-        'texture_score':  round(textr, 4),
-        'liveness_score': round(score, 3),
-        'verdict': 'LIVE' if score > 0.5 else 'SPOOF'
+        "blur_score": round(float(blur), 2),
+        "texture_score": round(texture_std, 4),
+        "liveness_score": round(float(score), 3),
+        "verdict": "LIVE" if score > 0.5 else "SPOOF"
     }
 
 def active_liveness_from_frames(frame_bytes_list: list[bytes]) -> dict:
