@@ -1,0 +1,81 @@
+:root {
+  --bg: #070710;
+  --surface: #0f0f1a;
+  --card: #13131f;
+  --border: #222238;
+  --border-hi: #333355;
+  --accent: #00e5ff;
+  --accent-dim: rgba(0,229,255,0.12);
+  --accent2: #ff3d71;
+  --accent2-dim: rgba(255,61,113,0.12);
+  --accent3: #a259ff;
+  --warn: #ffb400;
+  --warn-dim: rgba(255,180,0,0.12);
+  --green: #00e676;
+  --green-dim: rgba(0,230,118,0.12);
+  --text: #e8e8f4;
+  --muted: #5a5a7a;
+  --font-display: 'Syne', sans-serif;
+  --font-mono: 'Space Mono', monospace;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-display);
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Grid bg */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(0,229,255,0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,229,255,0.025) 1px, transparent 1px);
+  background-size: 48px 48px;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border-hi); border-radius: 3px; }
+
+button { font-family: var(--font-display); cursor: pointer; }
+
+/* Animations */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+@keyframes scanline {
+  0% { top: 0%; }
+  100% { top: 100%; }
+}
+
+.fade-up {
+  animation: fadeUp 0.4s ease forwards;
+}
+
+.fade-up-delay-1 { animation-delay: 0.08s; animation-fill-mode: both; opacity: 0; }
+.fade-up-delay-2 { animation-delay: 0.16s; animation-fill-mode: both; opacity: 0; }
+.fade-up-delay-3 { animation-delay: 0.24s; animation-fill-mode: both; opacity: 0; }
+.fade-up-delay-4 { animation-delay: 0.32s; animation-fill-mode: both; opacity: 0; }

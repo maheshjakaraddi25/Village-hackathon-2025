@@ -1,0 +1,79 @@
+# =========================
+# OS / Editor junk
+# =========================
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# =========================
+# Python / FastAPI backend
+# =========================
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+*.egg
+dist/
+build/
+.eggs/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.cache/
+
+# Virtual environments
+venv/
+.venv/
+env/
+ENV/
+
+# FastAPI / Uvicorn logs
+*.log
+
+# Environment variables
+.env
+.env.*
+*.env
+
+# SQLite / local DB files
+*.db
+*.sqlite3
+
+# =========================
+# React Vite frontend
+# =========================
+node_modules/
+dist/
+build/
+.vite/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# =========================
+# Optional: package manager lock files
+# (keep if you want consistent builds)
+# =========================
+# package-lock.json
+# yarn.lock
+# pnpm-lock.yaml
+
+# =========================
+# Tests / Coverage
+# =========================
+coverage/
+.nyc_output/
+
+# =========================
+# Misc
+# =========================
+*.pem
+*.key
+*.crt
