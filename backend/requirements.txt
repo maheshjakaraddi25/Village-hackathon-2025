@@ -1,15 +1,42 @@
-fastapi
-uvicorn
-python-multipart
-pydantic
-httpx
-anthropic
-opencv-python
-numpy
-Pillow
-deepface
-tensorflow
-torch
-torchvision
-scikit-image
-python-dateutil
+# ─────────────────────────────
+# Core API
+# ─────────────────────────────
+fastapi>=0.115.0
+uvicorn[standard]>=0.32.0
+python-multipart>=0.0.12
+pydantic>=2.10.0
+httpx>=0.28.0
+
+# ─────────────────────────────
+# Claude API
+# ─────────────────────────────
+anthropic>=0.40.0
+
+# ─────────────────────────────
+# Computer Vision
+# ─────────────────────────────
+opencv-python>=4.9.0.80
+numpy>=1.26.0
+Pillow>=10.0.0
+
+# ─────────────────────────────
+# Face Recognition (DeepFace stack)
+# ─────────────────────────────
+deepface==0.0.93
+tensorflow-cpu>=2.15.0
+
+# ─────────────────────────────
+# PyTorch (authenticity model)
+# ─────────────────────────────
+torch>=2.2.0
+torchvision>=0.17.0
+
+# ─────────────────────────────
+# Image & Liveness utilities
+# ─────────────────────────────
+scikit-image>=0.22.0
+
+# ─────────────────────────────
+# Utilities
+# ─────────────────────────────
+python-dateutil>=2.9.0

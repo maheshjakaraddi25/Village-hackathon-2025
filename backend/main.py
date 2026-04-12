@@ -20,7 +20,7 @@ from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from backend.models.pipeline import run_local_pipeline
+from models.pipeline import run_local_pipeline
 from rules.schema_patch import ensure_schema
 from rules.compliance import enforce_compliance_rules
 from rules.cross_doc import run_cross_doc_matching
